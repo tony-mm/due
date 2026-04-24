@@ -7,14 +7,22 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View as RNView } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { Task, Category, Priority, Subtask } from '../types';
 import { CategoryPill } from './CategoryPill';
+
+// Conditionally load DateTimePicker only on native platforms
+let DateTimePicker: any = null;
+if (Platform.OS !== 'web') {
+  try {
+    DateTimePicker = require('@react-native-community/datetimepicker').default;
+  } catch (e) {
+    console.warn('DateTimePicker not available:', e);
+  }
+}
 
 interface AddTaskSheetProps {
   visible: boolean;
@@ -103,15 +111,11 @@ export const AddTaskSheet: React.FC<AddTaskSheetProps> = ({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <SafeAreaView style={styles.overlay}>
+      <RNView style={styles.overlay}>
         <TouchableOpacity style={styles.backdrop} onPress={onClose} activeOpacity={1} />
-        <View style={styles.sheet}>
+        <RNView style={styles.sheet}>
           <View style={styles.handle} />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            style={styles.keyboardView}
-          >
-            <ScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView>
               <Text style={styles.sheetTitle}>
                 {task ? 'Edit Task' : 'New Task'}
               </Text>
@@ -185,21 +189,34 @@ export const AddTaskSheet: React.FC<AddTaskSheetProps> = ({
               <Text style={styles.label}>Due Date</Text>
               <TouchableOpacity
                 style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    // Date picker not supported on web; ignore or show a message
+                    return;
+                  }
+                  setShowDatePicker(true);
+                }}
               >
                 <Text style={[styles.dateText, !dueDate && styles.datePlaceholder]}>
                   {dueDate ? dueDate.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'No due date'}
                 </Text>
               </TouchableOpacity>
 
-              {showDatePicker && (
+              {showDatePicker && Platform.OS !== 'web' && DateTimePicker && (
                 <DateTimePicker
                   value={dueDate || new Date()}
                   mode="date"
-                  display="default"
-                  onChange={(event, date) => {
-                    setShowDatePicker(false);
-                    if (date) setDueDate(date);
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event: any, date?: Date) => {
+                    if (Platform.OS === 'android') {
+                      setShowDatePicker(false);
+                    }
+                    if (date) {
+                      setDueDate(date);
+                      if (Platform.OS === 'ios') {
+                        setShowDatePicker(false);
+                      }
+                    }
                   }}
                 />
               )}
@@ -233,9 +250,8 @@ export const AddTaskSheet: React.FC<AddTaskSheetProps> = ({
                 </Text>
               </TouchableOpacity>
             </ScrollView>
-          </KeyboardAvoidingView>
-        </View>
-      </SafeAreaView>
+        </RNView>
+      </RNView>
     </Modal>
   );
 };
@@ -255,7 +271,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     paddingHorizontal: 24,
     paddingBottom: 40,
-    maxHeight: '80%',
+    height: '80%',
+    width: '100%',
   },
   handle: {
     width: 36,
